@@ -1,0 +1,15 @@
+langchain==0.1.0
+streamlit==1.30.0
+openai==1.7.2
+python-dotenv==1.0.0
+pinecone-client==2.2.4
+langchain-openai==0.0.2.post1
+langchain-google-genai
+pypdf==3.17.4
+chromadb==0.4.22
+streamlit_chat==0.1.1
+faiss-cpu==1.7.4
+pycryptodome==3.15.0
+Flask
+pymongo[srv]
+azure-storage-blob
