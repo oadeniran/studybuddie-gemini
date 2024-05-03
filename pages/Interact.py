@@ -31,6 +31,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OBJECTIVE="Objective"
 TRUE_OR_FALSE="True/False"
 FLASH_CARDS='Flash Cards😍'
+FILL_IN_GAP = "Fill in the gaps"
 OBJECTIVE_DEFAULT_VALUE=5
 TRUE_OR_FALSE_DEFAULT_VALUE=5
 
@@ -126,10 +127,10 @@ class Agency:
 
 # Upload Section
 def upload():
-    if 'loggedIn' not in st.session_state:
-        st.write("Looks Like you are not logged in 🙁😕")
-        st.error("Please Login to access this screen")
-        return
+    #if 'loggedIn' not in st.session_state:
+    #    st.write("Looks Like you are not logged in 🙁😕")
+    #    st.error("Please Login to access this screen")
+    #    return
     st.header('Upload Your PDF')
     st.write("Drag and drop your PDF file here or click to upload. Please ensure that the text in the PDF is selectable and not a scanned image.")
     uploaded_file = st.file_uploader("", type="pdf")
@@ -174,10 +175,10 @@ def upload():
 
 def chatbot():
     if 'curr_df' not in st.session_state:
-        if 'loggedIn' not in st.session_state:
-            st.write("Looks Like you are not logged in 🙁😕")
-            st.error("Please Login to access this screen")
-            return
+        #if 'loggedIn' not in st.session_state:
+        #    st.write("Looks Like you are not logged in 🙁😕")
+        #    st.error("Please Login to access this screen")
+        #    return
         st.error("Please Upload a PDF File")
         
     else:
@@ -251,6 +252,29 @@ def parse_questions(input_text):
 
           
             questions.append(question_obj)
+
+    return questions
+
+def parse_german(input_text):
+    question_blocks = input_text.replace("*", "").split('QUESTION')
+    print(question_blocks, len(question_blocks))
+
+    questions = []
+
+    for block in question_blocks[1:]:
+        print("BLOCK is", block.replace("*", ""))
+
+        pattern = r'[0-9]'
+        temp = ''.join([p for p in block if p not in ["*", "\n", ":"]]).split("Answer")
+        print(temp)
+        question_number, question , answer = re.match(pattern,temp[0].strip()).group(),re.sub(pattern, '', temp[0].strip()), temp[1].strip()
+        print(question_number, question , answer)
+        question_obj = {
+            "question_num": question_number,
+            "question": question,
+            "answer": answer.split(",")
+        }
+        questions.append(question_obj)
 
     return questions
 
@@ -361,8 +385,39 @@ def generate_quizz(document,type,num_of_questions):
             <Begin Document>
             {doc}
             <End Document>"""
+    elif type == FILL_IN_GAP:
+        prompt_template =  """You are a teacher preparing german (fill in the gap) type questions for a quiz. Given the following document (document starts from <Begin Document>), please generate {num} questions and a corresponding short answer 
+            For each question, randomly select a section or sentence from the document, and then remove a number of random words from this selection but removed words must not be more than 5, please do not make any reference of the word "document"
+            Then the question is the sentence/selection without removed words where there is an evident blank space which students are expected to fill
+            The answers are the removed words.
+
+            Remember to vary the type of information each question is based on. Also, ensure each question has a different structure or focus to avoid repetition.
+
+            The examples below are to direct you on how to set the questions but on no ocassion are they ever to be included in the questions you generate.
+            Example:
+
+            Example Random selected statement : The essensce of ABC is for children
+
+            Example QUESTION 1: The ______ of ABC is for  ____ (removed words are essence and children)
+            Example Answer: essence, children
+
+            Example 2
+            Example Random selected statement : The name of the current team lead is Usman Ade
+
+            Example QUESTION 2: The name of the current team lead is ______ (removed word is Usman Ade)
+            Example Answer: Usman Ade
+            
+            End of example. Again These Examples are NEVER to be shown in the actual generated questions.
+
+            These questions should be detailed and solely based on the information provided in the document, and should follow format of examples above withe "QUESTION" being in uppercase
+            , however, NEVER include the removed words alongside the questions.
+            Also the questions should be questions with an answer so there should be no question where the answer is "Not provided in the given document. Therefore, if the length of the document is not up to 20 words and is not enough to generate good questions, then return 'Sorry, the provided document is too short to generate meaningful fill-in-the-gap questions.'
+            "
 
 
+            <Begin Document>
+            {doc}
+            <End Document>"""
     
     prompt = PromptTemplate(
     input_variables=["doc","num"], template=prompt_template
@@ -374,6 +429,8 @@ def generate_quizz(document,type,num_of_questions):
     print("questions===", questions)
     if type == FLASH_CARDS:
         cleaned_questions = parse_flash_cards(questions)
+    elif type == FILL_IN_GAP:
+        cleaned_questions = parse_german(questions)
     else:
         cleaned_questions = parse_questions(questions)
     print(cleaned_questions)
@@ -464,7 +521,7 @@ def quizz_generation():
     page_ranges = list(page_ranges_2_index.keys())
     selected_page_ranges = get_selected_page_ranges(page_ranges)
     st.write('Selected Page Range:', ', '.join(selected_page_ranges) if selected_page_ranges else 'None')
-    selection = st.radio("What Format do you want?", [OBJECTIVE, TRUE_OR_FALSE, FLASH_CARDS],horizontal=True)
+    selection = st.radio("What Format do you want?", [OBJECTIVE, TRUE_OR_FALSE, FLASH_CARDS,FILL_IN_GAP],horizontal=True)
     user_input = None
     if selection == OBJECTIVE:
         user_input = st.number_input('How many Questions Do you want Generated per Page', min_value=2, value=OBJECTIVE_DEFAULT_VALUE, step=1, format='%d')
@@ -472,7 +529,7 @@ def quizz_generation():
             st.error(f"Error: value should not be greater than {OBJECTIVE_DEFAULT_VALUE}.")
             return
         st.info(f"You'll be tested on a maximum of {user_input} questions per Page")
-    if selection == TRUE_OR_FALSE:
+    if selection == TRUE_OR_FALSE or selection == FILL_IN_GAP:
         user_input = st.number_input('How many Questions Do you want Generated per Page', min_value=2, value=TRUE_OR_FALSE_DEFAULT_VALUE, step=1, format='%d')
         if user_input > TRUE_OR_FALSE_DEFAULT_VALUE:
             st.error(f"Error: value should not be greater than {TRUE_OR_FALSE_DEFAULT_VALUE}.")
@@ -603,7 +660,56 @@ def display_on_streamlit():
                 '<div><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Barlow+Condensed&family=Cabin&display=swap" rel="stylesheet"></div>',
                 unsafe_allow_html=True,
             )
+    
+    elif type == FILL_IN_GAP:
+        state = get_state()
+        if not state['submitted']:
+            form_placeholder = st.empty()
+            with form_placeholder.form(key='quiz_form'):
+                st.write("Separate multiple answers with a comma. Please ensure your answers are exacly the same as the one in the pdf")
+                user_answers = {}
+                for idx, question in enumerate(data, start=1):
+                    st.write(f"Question {idx}: {question['question']}")
+                    #corr_ans = question['answer']
+                    user_answers[idx] = st.text_input("Wirte your answer here separated by a comma", key=idx)
+                
+                submit_button = st.form_submit_button(label='Submit Answers')
+                
+            if submit_button:
+                state['submitted'] = True
+                state['user_answers'] = user_answers
+                # Calculate score
+                score = 0
+                for i, dets in enumerate(data, start = 1):
+                    if len(dets['answer']) != len(user_answers[i].split(",")):
+                        continue
+                    else:
+                        for ac, sel in zip(dets['answer'], user_answers[i].split(",")):
+                            if sel.strip().lower() == ac.strip().lower():
+                                score += 1
+                    
+                state['score'] = score
+                form_placeholder.empty() # Clear the form
+                
+        if state['submitted']:
+            for idx, question in enumerate(data, start=1):
+                user_answer = state['user_answers'][idx].split(",")
+                correct_answer = question['answer']
+                
+                feedback = f"Correct answer is {correct_answer}"
+                st.write(f"Question {idx}: {question['question']}")
+                st.write(f"Your answer: {user_answer} - {feedback}")
+                st.write("\n")
+                st.write("\n")
 
+            # Display score
+            st.write(f"Your Score: {state['score']}/{len(data)}")
+
+            if st.button('Try Again'):
+                state['submitted']
+                st.experimental_rerun()
+                
+        
 
 
     else:
@@ -655,23 +761,20 @@ def display_on_streamlit():
 
 
 def main():
-    if 'loggedIn' not in st.session_state:
-        st.error("Please Login to Use feature......Return Home to login")
-    else:
-        log_activity("visit-interact-page")
-        st.sidebar.title("Navigation")
-        selection = st.sidebar.radio("Go to", ["Upload File","Interact With Uploaded PDF File", "Quizz Generation","Display Quizz"])
-        if selection == "Upload File":
-            log_activity("visit-interact-page")
-            upload()
-        elif selection == "Interact With Uploaded PDF File":
-            log_activity('select-interaction-chat')
-            chatbot()
-        elif selection == "Quizz Generation":
-            log_activity('quiz-generation')
-            quizz_generation()
-        elif selection == "Display Quizz":
-            log_activity('display-quiz')
-            display_on_streamlit()
+    #log_activity("visit-interact-page")
+    st.sidebar.title("Navigation")
+    selection = st.sidebar.radio("Go to", ["Upload File","Interact With Uploaded PDF File", "Quizz Generation","Display Quizz"])
+    if selection == "Upload File":
+        #log_activity("visit-interact-page")
+        upload()
+    elif selection == "Interact With Uploaded PDF File":
+        #log_activity('select-interaction-chat')
+        chatbot()
+    elif selection == "Quizz Generation":
+        #log_activity('quiz-generation')
+        quizz_generation()
+    elif selection == "Display Quizz":
+        #log_activity('display-quiz')
+        display_on_streamlit()
 
 main()

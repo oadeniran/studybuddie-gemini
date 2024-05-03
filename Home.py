@@ -13,7 +13,7 @@ base_url = os.getenv("BaseUrl")
 
 def signUp():
     st.title("Sign Up")
-	
+    st.info("Hackathon Organizers can proceed to 'Interact section' without signing up")
     with st.form("signup",clear_on_submit=False):
         username = st.text_input("Username (lowercase)")
         email = st.text_input("Email")
